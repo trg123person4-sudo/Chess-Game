@@ -7,6 +7,7 @@ import { recordGameResult } from '../components/Extras/StatsTracker';
 import { getSkillLevel } from '../engine/skillLevels';
 import { recordRatedMatch, getCurrentUser } from '../services/ratings';
 import { generatePGN } from '../rules/pgn';
+import { calculateMoveTime } from '../engine/calculateMoveTime';
 
 const SAVE_KEY = 'chess_engine_saved_game_v1';
 
@@ -44,9 +45,11 @@ export function useChessGame(options: UseChessGameOptions = {}) {
     inCheck: false
   });
   const [lastRatingChange, setLastRatingChange] = useState<number | null>(null);
+  const [isDelaying, setIsDelaying] = useState<boolean>(false);
+  const engineSearchStartTimeRef = useRef<number>(0);
+  const delayTimeoutRef = useRef<number | null>(null);
 
-  // Engine move callback
-  const handleEngineMove = useCallback(
+  const applyEngineMove = useCallback(
     (bestMove: string, from: string, to: string, promotion?: string) => {
       setGame((prevGame) => {
         if (prevGame.isGameOver()) return prevGame;
@@ -97,7 +100,36 @@ export function useChessGame(options: UseChessGameOptions = {}) {
         return newGame;
       });
     },
-    []
+    [checkAndSetGameStatus]
+  );
+
+  // Engine move callback with realistic human thinking delay
+  const handleEngineMove = useCallback(
+    (bestMove: string, from: string, to: string, promotion?: string) => {
+      const targetDelay = calculateMoveTime({
+        currentPly: moves.length,
+        targetElo,
+        chess: game,
+        lastMove
+      });
+
+      const elapsed = performance.now() - engineSearchStartTimeRef.current;
+      const remainingDelay = Math.max(0, targetDelay - elapsed);
+
+      if (remainingDelay > 15) {
+        setIsDelaying(true);
+        if (delayTimeoutRef.current) clearTimeout(delayTimeoutRef.current);
+        delayTimeoutRef.current = window.setTimeout(() => {
+          setIsDelaying(false);
+          delayTimeoutRef.current = null;
+          applyEngineMove(bestMove, from, to, promotion);
+        }, remainingDelay);
+      } else {
+        setIsDelaying(false);
+        applyEngineMove(bestMove, from, to, promotion);
+      }
+    },
+    [moves.length, targetElo, game, lastMove, applyEngineMove]
   );
 
   const {
@@ -191,10 +223,21 @@ export function useChessGame(options: UseChessGameOptions = {}) {
   useEffect(() => {
     if (status.isOver) return;
     const isEngineTurn = game.turn() !== playerColor;
-    if (isEngineTurn && !isSearching) {
+    if (isEngineTurn && !isSearching && !isDelaying) {
+      engineSearchStartTimeRef.current = performance.now();
       startSearch(game.fen(), skillLevel, personality, undefined, undefined, targetElo);
     }
-  }, [game, playerColor, skillLevel, targetElo, personality, status.isOver, isSearching, startSearch]);
+  }, [game, playerColor, skillLevel, targetElo, personality, status.isOver, isSearching, isDelaying, startSearch]);
+
+  // Clean up pending delay timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (delayTimeoutRef.current) {
+        clearTimeout(delayTimeoutRef.current);
+        delayTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Update evaluation bar on turn change
   useEffect(() => {
@@ -248,7 +291,7 @@ export function useChessGame(options: UseChessGameOptions = {}) {
   // Make human move
   const makeMove = useCallback(
     (from: string, to: string, promotion?: PieceType): boolean => {
-      if (status.isOver || isSearching) return false;
+      if (status.isOver || isSearching || isDelaying) return false;
       if (game.turn() !== playerColor) return false;
 
       const fenBefore = game.fen();
@@ -328,10 +371,15 @@ export function useChessGame(options: UseChessGameOptions = {}) {
         return false;
       }
     },
-    [status.isOver, isSearching, game, playerColor, checkAndSetGameStatus, analyzeFen, evaluateFen]
+    [status.isOver, isSearching, isDelaying, game, playerColor, checkAndSetGameStatus, analyzeFen, evaluateFen]
   );
 
   const resetGame = useCallback(() => {
+    if (delayTimeoutRef.current) {
+      clearTimeout(delayTimeoutRef.current);
+      delayTimeoutRef.current = null;
+    }
+    setIsDelaying(false);
     stopSearch();
     const fresh = new Chess();
     setGame(fresh);
@@ -346,7 +394,12 @@ export function useChessGame(options: UseChessGameOptions = {}) {
   }, [stopSearch]);
 
   const undoMove = useCallback(() => {
-    if (moves.length === 0 || isSearching) return;
+    if (moves.length === 0 || isSearching || isDelaying) return;
+    if (delayTimeoutRef.current) {
+      clearTimeout(delayTimeoutRef.current);
+      delayTimeoutRef.current = null;
+    }
+    setIsDelaying(false);
     stopSearch();
 
     // In a human vs engine match, undo 2 plies (both engine and human move)
@@ -367,17 +420,22 @@ export function useChessGame(options: UseChessGameOptions = {}) {
     setCurrentMoveIndex(targetMoveIndex);
     setLastMove(targetMoveIndex >= 0 ? { from: newMoves[targetMoveIndex].from, to: newMoves[targetMoveIndex].to } : null);
     checkAndSetGameStatus(reconstructed, newMoves);
-  }, [moves, isSearching, stopSearch, checkAndSetGameStatus]);
+  }, [moves, isSearching, isDelaying, stopSearch, checkAndSetGameStatus]);
 
   const requestTakeback = useCallback(() => {
-    if (status.isOver || isSearching || moves.length === 0) return false;
+    if (status.isOver || isSearching || isDelaying || moves.length === 0) return false;
     undoMove();
     return true;
-  }, [status.isOver, isSearching, moves.length, undoMove]);
+  }, [status.isOver, isSearching, isDelaying, moves.length, undoMove]);
 
   const abortGame = useCallback(() => {
     if (status.isOver) return false;
     if (moves.length >= 2) return false;
+    if (delayTimeoutRef.current) {
+      clearTimeout(delayTimeoutRef.current);
+      delayTimeoutRef.current = null;
+    }
+    setIsDelaying(false);
     stopSearch();
     setStatus({
       isOver: true,
@@ -391,6 +449,11 @@ export function useChessGame(options: UseChessGameOptions = {}) {
 
   const resign = useCallback(() => {
     if (status.isOver) return;
+    if (delayTimeoutRef.current) {
+      clearTimeout(delayTimeoutRef.current);
+      delayTimeoutRef.current = null;
+    }
+    setIsDelaying(false);
     stopSearch();
     const winner = playerColor === 'w' ? 'b' : 'w';
     setStatus({
@@ -508,7 +571,7 @@ export function useChessGame(options: UseChessGameOptions = {}) {
     lastMove,
     evalScore,
     status,
-    isSearching,
+    isSearching: isSearching || isDelaying,
     engineStats,
     candidates,
     makeMove,

@@ -5,6 +5,8 @@ import { globalTT, TTFlag } from './transposition';
 import { MoveOrderer } from './moveOrdering';
 import { CandidateMove, SkillLevelConfig } from '../types/engine';
 import { getSkillLevel, getSkillConfigForElo } from './skillLevels';
+import { getBookMove } from './openingBook';
+import { evaluateAndSelectMove, MultiPvCandidate } from './evaluateAndSelectMove';
 
 export interface SearchOptions {
   level?: number;
@@ -83,6 +85,30 @@ export class ChessSearcher {
         pv: [single.san],
         candidates: [{ move: single.san, from: single.from, to: single.to, score: 0 }]
       };
+    }
+
+    // 1. Opening Book Check (Polyglot / Curated Theory with Elo Depth Cutoff)
+    const effectiveElo = options.targetElo ?? skill.eloEstimate;
+    const currentPly = chess.history().length;
+    const bookMove = getBookMove(chess, effectiveElo, currentPly);
+    if (bookMove) {
+      const matched = legalMoves.find(
+        (m) => `${m.from}${m.to}${m.promotion || ''}` === bookMove.uci || m.san === bookMove.san
+      );
+      if (matched) {
+        return {
+          bestMove: `${matched.from}${matched.to}${matched.promotion || ''}`,
+          from: matched.from,
+          to: matched.to,
+          promotion: matched.promotion,
+          score: 0,
+          depth: 1,
+          nodes: 1,
+          timeMs: Math.max(1, Math.round(performance.now() - this.startTime)),
+          pv: [matched.san],
+          candidates: [{ move: matched.san, from: matched.from, to: matched.to, score: 0 }]
+        };
+      }
     }
 
     let overallBestMove = legalMoves[0];
@@ -199,7 +225,9 @@ export class ChessSearcher {
       rootCandidates.length > 0 ? rootCandidates : [{ move: overallBestMove.san, from: overallBestMove.from, to: overallBestMove.to, score: overallBestScore }],
       overallBestMove,
       skill,
-      overallBestScore
+      overallBestScore,
+      effectiveElo,
+      chess
     );
 
     const timeSpent = Math.max(1, Math.round(performance.now() - this.startTime));
@@ -401,13 +429,39 @@ export class ChessSearcher {
     candidates: CandidateMove[],
     bestMove: Move,
     skill: SkillLevelConfig,
-    bestScore: number = 0
+    bestScore: number = 0,
+    targetElo?: number,
+    chess?: Chess
   ): Move {
     if (skill.temperature <= 0 || candidates.length <= 1 || bestScore > 20000) {
       return bestMove;
     }
 
-    // 1. Blunder Injection: Low-Elo players occasionally make deliberate tactical mistakes
+    // 1. If targetElo and chess are available, route through evaluateAndSelectMove
+    if (targetElo && chess && candidates.length > 1) {
+      const multiPvCands: MultiPvCandidate[] = candidates.slice(0, 5).map((c, i) => {
+        const matchingLegal = legalMoves.find((m) => m.san === c.move);
+        return {
+          uci: matchingLegal ? `${matchingLegal.from}${matchingLegal.to}${matchingLegal.promotion || ''}` : `${c.from}${c.to}`,
+          from: c.from,
+          to: c.to,
+          san: c.move,
+          scoreCp: c.score,
+          pvRank: i + 1,
+          pv: [c.move]
+        };
+      });
+
+      const selected = evaluateAndSelectMove(targetElo, multiPvCands, chess, chess.history().length);
+      const matched = legalMoves.find(
+        (m) => m.san === selected.san || (m.from === selected.from && m.to === selected.to)
+      );
+      if (matched) {
+        return matched;
+      }
+    }
+
+    // 2. Fallback Blunder Injection: Low-Elo players occasionally make deliberate tactical mistakes
     if (skill.blunderProbability > 0 && Math.random() < skill.blunderProbability && candidates.length > 1) {
       const suboptimalCandidates = candidates.slice(1);
       const randomBlunder = suboptimalCandidates[Math.floor(Math.random() * suboptimalCandidates.length)];
@@ -417,7 +471,7 @@ export class ChessSearcher {
       }
     }
 
-    // 2. Boltzmann Softmax Selection
+    // 3. Boltzmann Softmax Selection
     const maxScore = Math.max(...candidates.map((c) => c.score));
     const filteredCandidates = skill.blunderWindowCp > 0
       ? candidates.filter((c) => maxScore - c.score <= skill.blunderWindowCp)
