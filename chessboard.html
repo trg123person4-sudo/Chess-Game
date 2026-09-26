@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Chess Board - Color Themes</title>
+  <style>
+    :root {
+      --light-sq: #F0D9B5;
+      --dark-sq: #B58863;
+      --bg-color: #141311;
+      --card-bg: #1e1d1a;
+      --text-main: #f5f5f5;
+      --text-dim: #9e9a93;
+      --accent: #d97706;
+      --accent-hover: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    /* Header & Theme Display */
+    .header-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      text-align: center;
+    }
+
+    .app-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    .theme-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background-color: var(--card-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 6px 18px;
+      border-radius: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .theme-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.02em;
+      transition: color 0.2s ease;
+    }
+
+    .theme-color-chip {
+      display: inline-flex;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      flex-shrink: 0;
+    }
+
+    .theme-color-chip .half-light {
+      width: 50%;
+      height: 100%;
+      background-color: var(--light-sq);
+      transition: background-color 0.3s ease;
+    }
+
+    .theme-color-chip .half-dark {
+      width: 50%;
+      height: 100%;
+      background-color: var(--dark-sq);
+      transition: background-color 0.3s ease;
+    }
+
+    /* Chess Board Outer Wrapper */
+    .board-wrapper {
+      position: relative;
+      padding: 6px;
+      background-color: #262421;
+      border-radius: 10px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    }
+
+    /* 8x8 Chess Board */
+    .chess-board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      width: min(84vw, 480px);
+      height: min(84vw, 480px);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* Individual Square */
+    .square {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .square.light {
+      background-color: var(--light-sq);
+    }
+
+    .square.dark {
+      background-color: var(--dark-sq);
+    }
+
+    .square.selected {
+      box-shadow: inset 0 0 0 3px rgba(245, 158, 11, 0.85);
+      background-blend-mode: overlay;
+    }
+
+    .square.selected::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-color: rgba(245, 158, 11, 0.25);
+      pointer-events: none;
+    }
+
+    /* Rank & File Coordinates */
+    .coord {
+      position: absolute;
+      font-size: clamp(9px, 1.8vw, 11px);
+      font-weight: 700;
+      font-family: inherit;
+      pointer-events: none;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    .coord-rank {
+      top: 4px;
+      left: 4px;
+    }
+
+    .coord-file {
+      bottom: 3px;
+      right: 4px;
+    }
+
+    .square.light .coord {
+      color: var(--dark-sq);
+      opacity: 0.85;
+      transition: color 0.3s ease;
+    }
+
+    .square.dark .coord {
+      color: var(--light-sq);
+      opacity: 0.85;
+      transition: color 0.3s ease;
+    }
+
+    /* Chess Piece Graphic */
+    .piece {
+      width: 82%;
+      height: 82%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      transition: transform 0.15s ease;
+      filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+    }
+
+    .piece svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .square:hover .piece {
+      transform: scale(1.08);
+    }
+
+    /* Dot Indicators */
+    .dots-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 4px 8px;
+    }
+
+    .theme-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      padding: 0;
+      background: none;
+      display: flex;
+      overflow: hidden;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      opacity: 0.6;
+    }
+
+    .theme-dot:hover {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+
+    .theme-dot.active {
+      opacity: 1;
+      transform: scale(1.4);
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+    }
+
+    .theme-dot .dot-half-light,
+    .theme-dot .dot-half-dark {
+      width: 50%;
+      height: 100%;
+    }
+
+    /* Action Button */
+    .button-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .change-color-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 13px 32px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(217, 119, 6, 0.35);
+      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+      outline: none;
+    }
+
+    .change-color-btn:hover {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      box-shadow: 0 6px 22px rgba(245, 158, 11, 0.45);
+      transform: translateY(-2px);
+    }
+
+    .change-color-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+    }
+
+    .change-color-btn svg {
+      width: 17px;
+      height: 17px;
+      transition: transform 0.3s ease;
+    }
+
+    .change-color-btn:hover svg {
+      transform: rotate(45deg);
+    }
+
+    .helper-text {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 16px 8px;
+      }
+      .change-color-btn {
+        width: 100%;
+        padding: 12px 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header with active theme name -->
+    <header class="header-section">
+      <span class="app-title">Chess Theme Studio</span>
+      <div class="theme-display">
+        <span class="theme-color-chip">
+          <span class="half-light"></span>
+          <span class="half-dark"></span>
+        </span>
+        <span id="theme-name" class="theme-name">Classic Wood</span>
+      </div>
+    </header>
+
+    <!-- Chess Board Outer Wrapper -->
+    <div class="board-wrapper">
+      <div id="chess-board" class="chess-board" role="grid" aria-label="Chess Board">
+        <!-- 64 squares generated by JavaScript -->
+      </div>
+    </div>
+
+    <!-- Theme Dot Indicators -->
+    <nav class="dots-container" id="theme-dots" aria-label="Theme selector">
+      <!-- 8 dots generated by JavaScript -->
+    </nav>
+
+    <!-- Main Cycle Button -->
+    <div class="button-container">
+      <button id="change-color-btn" class="change-color-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v18"/>
+          <path d="M12 12 3 3"/>
+        </svg>
+        <span>Change board color.</span>
+      </button>
+      <span class="helper-text">Click squares to move pieces &bull; Press Space to cycle themes</span>
+    </div>
+  </div>
+
+  <script>
+    // 1. Theme Definitions
+    const themes = [
+      { name: 'Classic Wood', light: '#F0D9B5', dark: '#B58863' },
+      { name: 'Forest Green', light: '#EEEED2', dark: '#769656' },
+      { name: 'Ocean Blue', light: '#DEE3E6', dark: '#8CA2AD' },
+      { name: 'Spring Green', light: '#FFFFDD', dark: '#86A666' },
+      { name: 'Slate Marble', light: '#E8E8E8', dark: '#7C7C7C' },
+      { name: 'Midnight Blue', light: '#D6E4F0', dark: '#3A6EA5' },
+      { name: 'Amethyst', light: '#E8E3F0', dark: '#6B5B95' },
+      { name: 'Glacier', light: '#E3EDF1', dark: '#7A9CAE' }
+    ];
+
+    let currentThemeIndex = 0;
+
+    // 2. High-Quality Inline SVG Chess Pieces (No external assets)
+    const PIECE_SVGS = {
+      // White Pieces
+      'wP': '<svg viewBox="0 0 45 45"><path d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 l 23,0 c 0,-7.92 -4.41,-12.41 -7.41,-13.47 C 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z" style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linejoin:round;"/></svg>',
+      'wR': '<svg viewBox="0 0 45 45"><g style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,39 L 36,39 L 36,36 L 9,36 L 9,39 z"/><path d="M 12,36 L 12,32 L 33,32 L 33,36 L 12,36 z"/><path d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14"/><path d="M 34,14 L 31,17 L 14,17 L 11,14"/><path d="M 13,17 L 14,32 L 31,32 L 32,17"/></g></svg>',
+      'wN': '<svg viewBox="0 0 45 45"><path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"/><path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,7.4 17.5,7 19.5,7 C 21.5,7 23,8 24,10 C 23.5,11.5 22.5,12 21,12 C 19.5,12 19,10.5 19.5,9 C 18,9 15.5,10 16,13 C 18.5,13.5 21.5,12.5 22,10 z" style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"/><circle cx="9.5" cy="25.5" r="1" style="fill:#000000;"/></svg>',
+      'wB': '<svg viewBox="0 0 45 45"><g style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.646,38.99 6.677,38.97 6,38 C 7.354,36.54 9,36 9,36 z"/><path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z"/><circle cx="22.5" cy="8.5" r="1.5"/></g><path d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18" style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linejoin:miter;"/></svg>',
+      'wQ': '<svg viewBox="0 0 45 45"><g style="fill:#ffffff;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,26 C 17.5,24.5 30,24.5 36,26 L 38.5,13.5 L 31,25 L 30.7,10.5 L 25.5,24.5 L 22.5,10 L 19.5,24.5 L 14.3,10.5 L 14,25 L 6.5,13.5 L 9,26 z"/><path d="M 9,26 C 9,28 10.5,28 11.5,30 C 12.5,31.5 12.5,31 12,33.5 C 10.5,34.5 11,36 11,36 C 9.5,37.5 11,38.5 11,38.5 L 34,38.5 C 34,38.5 35.5,37.5 34,36 C 34,36 34.5,34.5 33,33.5 C 32.5,31 32.5,31.5 33.5,30 C 34.5,28 36,28 36,26"/><circle cx="6" cy="12" r="2"/><circle cx="14" cy="9" r="2"/><circle cx="22.5" cy="8" r="2"/><circle cx="31" cy="9" r="2"/><circle cx="39" cy="12" r="2"/></g></svg>',
+      'wK': '<svg viewBox="0 0 45 45"><g style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 22.5,11.63 L 22.5,6"/><path d="M 20,8 L 25,8"/><path d="M 22.5,25 C 22.5,25 27,17.5 25.5,14.5 C 24,11.5 21,11.5 22.5,25 z" style="fill:#ffffff;"/><path d="M 12.5,37 C 17.5,34 27.5,34 32.5,37 L 32.5,30 C 32.5,30 41.5,25.5 38.5,19.5 C 34.5,13 25,16 22.5,23.5 C 20,16 10.5,13 6.5,19.5 C 3.5,25.5 12.5,30 12.5,30 L 12.5,37 z" style="fill:#ffffff;"/><path d="M 11.5,30 C 17,27 28,27 33.5,30"/><path d="M 11.5,33.5 C 17,30.5 28,30.5 33.5,33.5"/><path d="M 11.5,37 C 17,34 28,34 33.5,37"/></g></svg>',
+
+      // Black Pieces
+      'bP': '<svg viewBox="0 0 45 45"><path d="m 22.5,9 c -2.21,0 -4,1.79 -4,4 0,0.89 0.29,1.71 0.78,2.38 C 17.33,16.5 16,18.59 16,21 c 0,2.03 0.94,3.84 2.41,5.03 C 15.41,27.09 11,31.58 11,39.5 l 23,0 c 0,-7.92 -4.41,-12.41 -7.41,-13.47 C 28.06,24.84 29,23.03 29,21 29,18.59 27.67,16.5 25.72,15.38 26.21,14.71 26.5,13.89 26.5,13 c 0,-2.21 -1.79,-4 -4,-4 z" style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linejoin:round;"/></svg>',
+      'bR': '<svg viewBox="0 0 45 45"><g style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,39 L 36,39 L 36,36 L 9,36 L 9,39 z"/><path d="M 12.5,32 L 12.5,36 L 32.5,36 L 32.5,32 L 12.5,32 z"/><path d="M 12,36 L 12,32 L 33,32 L 33,36 L 12,36 z"/><path d="M 14,29.5 L 14,16.5 L 31,16.5 L 31,29.5 L 14,29.5 z"/><path d="M 14,16.5 L 11,14 L 34,14 L 31,16.5 L 14,16.5 z"/><path d="M 11,14 L 11,9 L 15,9 L 15,11 L 20,11 L 20,9 L 25,9 L 25,11 L 30,11 L 30,9 L 34,9 L 34,14 L 11,14 z"/></g></svg>',
+      'bN': '<svg viewBox="0 0 45 45"><path d="M 22,10 C 32.5,11 38.5,18 38,39 L 15,39 C 15,30 25,32.5 23,18" style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"/><path d="M 24,18 C 24.38,20.91 18.45,25.37 16,27 C 13,29 13.18,31.34 11,31 C 9.958,30.06 12.41,27.96 11,28 C 10,28 11.19,29.23 10,30 C 9,30 5.997,31 6,26 C 6,24 12,14 12,14 C 12,14 13.89,12.1 14,10.5 C 13.27,7.4 17.5,7 19.5,7 C 21.5,7 23,8 24,10 C 23.5,11.5 22.5,12 21,12 C 19.5,12 19,10.5 19.5,9 C 18,9 15.5,10 16,13 C 18.5,13.5 21.5,12.5 22,10 z" style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"/><circle cx="9.5" cy="25.5" r="1" style="fill:#ffffff;"/></svg>',
+      'bB': '<svg viewBox="0 0 45 45"><g style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,36 C 12.39,35.03 19.11,36.43 22.5,34 C 25.89,36.43 32.61,35.03 36,36 C 36,36 37.65,36.54 39,38 C 38.32,38.97 37.35,38.99 36,38.5 C 32.61,37.53 25.89,38.96 22.5,37.5 C 19.11,38.96 12.39,37.53 9,38.5 C 7.646,38.99 6.677,38.97 6,38 C 7.354,36.54 9,36 9,36 z"/><path d="M 15,32 C 17.5,34.5 27.5,34.5 30,32 C 30.5,30.5 30,30 30,30 C 30,27.5 27.5,26 27.5,26 C 33,24.5 33.5,14.5 22.5,10.5 C 11.5,14.5 12,24.5 17.5,26 C 17.5,26 15,27.5 15,30 C 15,30 14.5,30.5 15,32 z"/><circle cx="22.5" cy="8.5" r="1.5"/></g><path d="M 17.5,26 L 27.5,26 M 15,30 L 30,30 M 22.5,15.5 L 22.5,20.5 M 20,18 L 25,18" style="fill:none;stroke:#ffffff;stroke-width:1.5;stroke-linejoin:miter;"/></svg>',
+      'bQ': '<svg viewBox="0 0 45 45"><g style="fill:#21201d;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 9,26 C 17.5,24.5 30,24.5 36,26 L 38.5,13.5 L 31,25 L 30.7,10.5 L 25.5,24.5 L 22.5,10 L 19.5,24.5 L 14.3,10.5 L 14,25 L 6.5,13.5 L 9,26 z"/><path d="M 9,26 C 9,28 10.5,28 11.5,30 C 12.5,31.5 12.5,31 12,33.5 C 10.5,34.5 11,36 11,36 C 9.5,37.5 11,38.5 11,38.5 L 34,38.5 C 34,38.5 35.5,37.5 34,36 C 34,36 34.5,34.5 33,33.5 C 32.5,31 32.5,31.5 33.5,30 C 34.5,28 36,28 36,26"/><circle cx="6" cy="12" r="2"/><circle cx="14" cy="9" r="2"/><circle cx="22.5" cy="8" r="2"/><circle cx="31" cy="9" r="2"/><circle cx="39" cy="12" r="2"/></g></svg>',
+      'bK': '<svg viewBox="0 0 45 45"><g style="fill:none;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M 22.5,11.63 L 22.5,6" style="stroke:#ffffff;"/><path d="M 20,8 L 25,8" style="stroke:#ffffff;"/><path d="M 22.5,25 C 22.5,25 27,17.5 25.5,14.5 C 24,11.5 21,11.5 22.5,25 z" style="fill:#21201d;"/><path d="M 12.5,37 C 17.5,34 27.5,34 32.5,37 L 32.5,30 C 32.5,30 41.5,25.5 38.5,19.5 C 34.5,13 25,16 22.5,23.5 C 20,16 10.5,13 6.5,19.5 C 3.5,25.5 12.5,30 12.5,30 L 12.5,37 z" style="fill:#21201d;"/><path d="M 11.5,30 C 17,27 28,27 33.5,30" style="stroke:#ffffff;"/><path d="M 11.5,33.5 C 17,30.5 28,30.5 33.5,33.5" style="stroke:#ffffff;"/><path d="M 11.5,37 C 17,34 28,34 33.5,37" style="stroke:#ffffff;"/></g></svg>'
+    };
+
+    // 3. Initial Piece Placement (Standard Chess Setup)
+    const initialBoard = {
+      'a8': 'bR', 'b8': 'bN', 'c8': 'bB', 'd8': 'bQ', 'e8': 'bK', 'f8': 'bB', 'g8': 'bN', 'h8': 'bR',
+      'a7': 'bP', 'b7': 'bP', 'c7': 'bP', 'd7': 'bP', 'e7': 'bP', 'f7': 'bP', 'g7': 'bP', 'h7': 'bP',
+      'a2': 'wP', 'b2': 'wP', 'c2': 'wP', 'd2': 'wP', 'e2': 'wP', 'f2': 'wP', 'g2': 'wP', 'h2': 'wP',
+      'a1': 'wR', 'b1': 'wN', 'c1': 'wB', 'd1': 'wQ', 'e1': 'wK', 'f1': 'wB', 'g1': 'wN', 'h1': 'wR'
+    };
+
+    // Live state
+    let boardState = { ...initialBoard };
+    let selectedSquare = null;
+
+    // 4. Apply Theme to CSS Custom Properties
+    function applyTheme(index) {
+      currentThemeIndex = index;
+      const theme = themes[currentThemeIndex];
+
+      // Update root variables
+      document.documentElement.style.setProperty('--light-sq', theme.light);
+      document.documentElement.style.setProperty('--dark-sq', theme.dark);
+
+      // Update name text
+      const nameEl = document.getElementById('theme-name');
+      if (nameEl) nameEl.textContent = theme.name;
+
+      // Update dots
+      document.querySelectorAll('.theme-dot').forEach((dot, idx) => {
+        dot.classList.toggle('active', idx === currentThemeIndex);
+        dot.setAttribute('aria-selected', idx === currentThemeIndex ? 'true' : 'false');
+      });
+    }
+
+    // 5. Render Board
+    function renderBoard() {
+      const boardEl = document.getElementById('chess-board');
+      boardEl.innerHTML = '';
+
+      const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+      const ranks = [8, 7, 6, 5, 4, 3, 2, 1];
+
+      for (let r = 0; r < 8; r++) {
+        for (let f = 0; f < 8; f++) {
+          const file = files[f];
+          const rank = ranks[r];
+          const squareCoord = `${file}${rank}`;
+          const isLight = (f + rank) % 2 === 0;
+
+          const square = document.createElement('div');
+          square.className = `square ${isLight ? 'light' : 'dark'}`;
+          square.dataset.coord = squareCoord;
+          square.setAttribute('role', 'gridcell');
+          square.setAttribute('aria-label', squareCoord);
+
+          if (selectedSquare === squareCoord) {
+            square.classList.add('selected');
+          }
+
+          // Rank label (left edge only, i.e. file 'a')
+          if (f === 0) {
+            const rankLabel = document.createElement('span');
+            rankLabel.className = 'coord coord-rank';
+            rankLabel.textContent = rank;
+            square.appendChild(rankLabel);
+          }
+
+          // File label (bottom edge only, i.e. rank 1)
+          if (rank === 1) {
+            const fileLabel = document.createElement('span');
+            fileLabel.className = 'coord coord-file';
+            fileLabel.textContent = file;
+            square.appendChild(fileLabel);
+          }
+
+          // Render piece if square is occupied
+          const pieceKey = boardState[squareCoord];
+          if (pieceKey && PIECE_SVGS[pieceKey]) {
+            const pieceDiv = document.createElement('div');
+            pieceDiv.className = 'piece';
+            pieceDiv.innerHTML = PIECE_SVGS[pieceKey];
+            square.appendChild(pieceDiv);
+          }
+
+          // Interactive click handler (select piece or move piece)
+          square.addEventListener('click', () => handleSquareClick(squareCoord));
+
+          boardEl.appendChild(square);
+        }
+      }
+    }
+
+    // 6. Interactive Piece Movement (Click to move)
+    function handleSquareClick(coord) {
+      if (selectedSquare === coord) {
+        selectedSquare = null;
+        renderBoard();
+        return;
+      }
+
+      if (!selectedSquare) {
+        if (boardState[coord]) {
+          selectedSquare = coord;
+          renderBoard();
+        }
+      } else {
+        // Move piece from selectedSquare to coord
+        const movingPiece = boardState[selectedSquare];
+        delete boardState[selectedSquare];
+        boardState[coord] = movingPiece;
+        selectedSquare = null;
+        renderBoard();
+      }
+    }
+
+    // 7. Render Dot Indicators
+    function renderDots() {
+      const dotsContainer = document.getElementById('theme-dots');
+      dotsContainer.innerHTML = '';
+
+      themes.forEach((theme, idx) => {
+        const dot = document.createElement('button');
+        dot.className = `theme-dot ${idx === currentThemeIndex ? 'active' : ''}`;
+        dot.title = theme.name;
+        dot.setAttribute('role', 'tab');
+        dot.setAttribute('aria-label', `Theme: ${theme.name}`);
+        dot.setAttribute('aria-selected', idx === currentThemeIndex ? 'true' : 'false');
+
+        dot.innerHTML = `
+          <span class="dot-half-light" style="background-color: ${theme.light}"></span>
+          <span class="dot-half-dark" style="background-color: ${theme.dark}"></span>
+        `;
+
+        dot.addEventListener('click', () => {
+          applyTheme(idx);
+        });
+
+        dotsContainer.appendChild(dot);
+      });
+    }
+
+    // 8. Next Theme Cycle
+    function cycleTheme() {
+      const nextIndex = (currentThemeIndex + 1) % themes.length;
+      applyTheme(nextIndex);
+    }
+
+    // 9. Attach Event Listeners
+    document.getElementById('change-color-btn').addEventListener('click', cycleTheme);
+
+    // Keyboard shortcut: Spacebar to cycle theme
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        cycleTheme();
+      }
+    });
+
+    // Initialize
+    applyTheme(0);
+    renderDots();
+    renderBoard();
+  </script>
+</body>
+</html>
