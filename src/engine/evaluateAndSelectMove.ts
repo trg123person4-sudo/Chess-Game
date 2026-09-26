@@ -80,7 +80,7 @@ export function findHangingOpponentSquares(chess: Chess): string[] {
 
   const legalMoves = chess.moves({ verbose: true });
   // Candidate captures available right now
-  const attackableSquares = new Set(
+  const attackableSquares = new Set<string>(
     legalMoves.filter((m) => m.captured).map((m) => m.to)
   );
 
@@ -88,7 +88,7 @@ export function findHangingOpponentSquares(chess: Chess): string[] {
     for (let c = 0; c < 8; c++) {
       const piece = board[r][c];
       if (piece && piece.color === opponentColor && piece.type !== 'k') {
-        const sq = String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r);
+        const sq = (String.fromCharCode('a'.charCodeAt(0) + c) + (8 - r)) as Square;
         if (attackableSquares.has(sq)) {
           // If we can capture it, check if it's high value (Queen, Rook, Bishop, Knight)
           hangingSquares.push(sq);

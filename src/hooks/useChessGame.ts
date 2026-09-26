@@ -49,6 +49,83 @@ export function useChessGame(options: UseChessGameOptions = {}) {
   const engineSearchStartTimeRef = useRef<number>(0);
   const delayTimeoutRef = useRef<number | null>(null);
 
+  const handleGameEndRecord = useCallback(
+    (winner: PieceColor | 'draw' | null, reason: GameTermination, currentMoves: MoveRecord[]) => {
+      if (reason === 'aborted') {
+        setLastRatingChange(null);
+        return;
+      }
+      const isWin = winner === playerColor;
+      const isDraw = winner === 'draw';
+      const outcome = isWin ? 'win' : isDraw ? 'draw' : 'loss';
+
+      const pgn = generatePGN({
+        event: 'Rated Bot Game',
+        white: playerColor === 'w' ? getCurrentUser().username : `Stockfish (~${targetElo})`,
+        black: playerColor === 'b' ? getCurrentUser().username : `Stockfish (~${targetElo})`,
+        result: isWin ? (playerColor === 'w' ? '1-0' : '0-1') : isDraw ? '1/2-1/2' : (playerColor === 'w' ? '0-1' : '1-0'),
+        moves: currentMoves.map((m) => m.san)
+      });
+
+      const { ratingChange } = recordRatedMatch({
+        opponentName: `Stockfish (~${targetElo})`,
+        opponentElo: targetElo,
+        result: outcome,
+        reason: reason || 'unknown',
+        pgn,
+        playerColor,
+        movesCount: currentMoves.length
+      });
+
+      setLastRatingChange(ratingChange);
+    },
+    [playerColor, targetElo]
+  );
+
+  const checkAndSetGameStatus = useCallback(
+    (g: Chess, overrideMoves?: MoveRecord[]): GameStatus => {
+      const inCheck = g.inCheck();
+      let isOver = false;
+      let winner: PieceColor | 'draw' | null = null;
+      let reason: GameTermination = null;
+
+      if (g.isCheckmate()) {
+        isOver = true;
+        winner = g.turn() === 'w' ? 'b' : 'w';
+        reason = 'checkmate';
+        const isPlayerWin = winner === playerColor;
+        sounds.playGameEnd(isPlayerWin);
+        recordGameResult(skillLevel, isPlayerWin ? 'win' : 'loss');
+      } else if (g.isStalemate()) {
+        isOver = true;
+        winner = 'draw';
+        reason = 'stalemate';
+        sounds.playGameEnd(false);
+        recordGameResult(skillLevel, 'draw');
+      } else if (g.isThreefoldRepetition()) {
+        isOver = true;
+        winner = 'draw';
+        reason = 'threefold_repetition';
+        sounds.playGameEnd(false);
+        recordGameResult(skillLevel, 'draw');
+      } else if (g.isInsufficientMaterial()) {
+        isOver = true;
+        winner = 'draw';
+        reason = 'insufficient_material';
+        sounds.playGameEnd(false);
+        recordGameResult(skillLevel, 'draw');
+      }
+
+      const newStatus = { isOver, winner, reason, inCheck };
+      setStatus(newStatus);
+      if (isOver) {
+        handleGameEndRecord(winner, reason, overrideMoves || moves);
+      }
+      return newStatus;
+    },
+    [playerColor, skillLevel, moves, handleGameEndRecord]
+  );
+
   const applyEngineMove = useCallback(
     (bestMove: string, from: string, to: string, promotion?: string) => {
       setGame((prevGame) => {
@@ -141,83 +218,6 @@ export function useChessGame(options: UseChessGameOptions = {}) {
     evaluateFen,
     analyzeFen
   } = useEngineWorker(handleEngineMove);
-
-  const handleGameEndRecord = useCallback(
-    (winner: PieceColor | 'draw' | null, reason: GameTermination, currentMoves: MoveRecord[]) => {
-      if (reason === 'aborted') {
-        setLastRatingChange(null);
-        return;
-      }
-      const isWin = winner === playerColor;
-      const isDraw = winner === 'draw';
-      const outcome = isWin ? 'win' : isDraw ? 'draw' : 'loss';
-
-      const pgn = generatePGN({
-        event: 'Rated Bot Game',
-        white: playerColor === 'w' ? getCurrentUser().username : `Stockfish (~${targetElo})`,
-        black: playerColor === 'b' ? getCurrentUser().username : `Stockfish (~${targetElo})`,
-        result: isWin ? (playerColor === 'w' ? '1-0' : '0-1') : isDraw ? '1/2-1/2' : (playerColor === 'w' ? '0-1' : '1-0'),
-        moves: currentMoves.map((m) => m.san)
-      });
-
-      const { ratingChange } = recordRatedMatch({
-        opponentName: `Stockfish (~${targetElo})`,
-        opponentElo: targetElo,
-        result: outcome,
-        reason: reason || 'unknown',
-        pgn,
-        playerColor,
-        movesCount: currentMoves.length
-      });
-
-      setLastRatingChange(ratingChange);
-    },
-    [playerColor, targetElo]
-  );
-
-  const checkAndSetGameStatus = useCallback(
-    (g: Chess, overrideMoves?: MoveRecord[]): GameStatus => {
-      const inCheck = g.inCheck();
-      let isOver = false;
-      let winner: PieceColor | 'draw' | null = null;
-      let reason: GameTermination = null;
-
-      if (g.isCheckmate()) {
-        isOver = true;
-        winner = g.turn() === 'w' ? 'b' : 'w';
-        reason = 'checkmate';
-        const isPlayerWin = winner === playerColor;
-        sounds.playGameEnd(isPlayerWin);
-        recordGameResult(skillLevel, isPlayerWin ? 'win' : 'loss');
-      } else if (g.isStalemate()) {
-        isOver = true;
-        winner = 'draw';
-        reason = 'stalemate';
-        sounds.playGameEnd(false);
-        recordGameResult(skillLevel, 'draw');
-      } else if (g.isThreefoldRepetition()) {
-        isOver = true;
-        winner = 'draw';
-        reason = 'threefold_repetition';
-        sounds.playGameEnd(false);
-        recordGameResult(skillLevel, 'draw');
-      } else if (g.isInsufficientMaterial()) {
-        isOver = true;
-        winner = 'draw';
-        reason = 'insufficient_material';
-        sounds.playGameEnd(false);
-        recordGameResult(skillLevel, 'draw');
-      }
-
-      const newStatus = { isOver, winner, reason, inCheck };
-      setStatus(newStatus);
-      if (isOver) {
-        handleGameEndRecord(winner, reason, overrideMoves || moves);
-      }
-      return newStatus;
-    },
-    [playerColor, skillLevel, moves, handleGameEndRecord]
-  );
 
   // Trigger engine turn when it's engine's turn to move
   useEffect(() => {
